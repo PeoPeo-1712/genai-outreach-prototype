@@ -1,0 +1,48 @@
+datasource db { 
+    provider = "sqlite" 
+    url = env("DATABASE_URL") 
+} 
+generator client { 
+    provider = "prisma-client-js" 
+} 
+model Candidate { 
+    id              String @id @default(uuid()) 
+    xUserId         String @unique 
+    username        String 
+    name            String 
+    bio             String? 
+    location        String? 
+    fitScore        Int? 
+    whyTheyFit      String? 
+    evidenceQuote   String? 
+    evidenceUrl     String? 
+    status          String @default("PENDING") 
+    createdAt       DateTime @default(now()) 
+    updatedAt       DateTime @updatedAt 
+
+    messages        Message[] 
+} 
+model Message { 
+    id              String @id @default(uuid()) 
+    candidateId     String 
+    candidate       Candidate @relation(fields: [candidateId], references: [id]) 
+    draftText       String 
+    sentText        String? 
+    xDmEventId      String? 
+    xConversationId String? 
+    sendStatus      String @default("DRAFT")
+    errorReason     String? 
+    sentAt          DateTime? 
+    latestReplyText String? 
+    repliedAt       DateTime? 
+    needsAttention  Boolean @default(false) 
+    createdAt       DateTime @default(now()) 
+    updatedAt       DateTime @updatedAt 
+} 
+model RateLimitLog { 
+    endpoint        String @id 
+    limitMax        Int? 
+    remaining       Int? 
+    resetEpoch      Int? 
+    updatedAt       DateTime @updatedAt 
+}
