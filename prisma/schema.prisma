@@ -2,9 +2,11 @@ datasource db {
     provider = "sqlite" 
     url = env("DATABASE_URL") 
 } 
+
 generator client { 
     provider = "prisma-client-js" 
 } 
+
 model Candidate { 
     id              String @id @default(uuid()) 
     xUserId         String @unique 
@@ -13,6 +15,8 @@ model Candidate {
     bio             String? 
     location        String? 
     fitScore        Int? 
+    roleCategory    String?
+    seaConnection   String?
     whyTheyFit      String? 
     evidenceQuote   String? 
     evidenceUrl     String? 
@@ -22,10 +26,11 @@ model Candidate {
 
     messages        Message[] 
 } 
+
 model Message { 
     id              String @id @default(uuid()) 
     candidateId     String 
-    candidate       Candidate @relation(fields: [candidateId], references: [id]) 
+    candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade) 
     draftText       String 
     sentText        String? 
     xDmEventId      String? 
@@ -39,10 +44,44 @@ model Message {
     createdAt       DateTime @default(now()) 
     updatedAt       DateTime @updatedAt 
 } 
+
 model RateLimitLog { 
     endpoint        String @id 
     limitMax        Int? 
     remaining       Int? 
     resetEpoch      Int? 
     updatedAt       DateTime @updatedAt 
+}
+
+model XAuthConnection { 
+    id              String @id @default(cuid()) 
+    xUserId         String @unique 
+    username        String 
+    accessToken     String 
+    refreshToken    String? 
+    expiresAt       DateTime 
+    scope           String? 
+    createdAt       DateTime @default(now()) 
+    updatedAt       DateTime @updatedAt 
+}
+
+model Campaign {
+    id              String @id @default(uuid())
+    name            String
+    query           String?
+    mode            String @default("segment")
+    targetCount     Int @default(0)
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+}
+
+
+model Campaign {
+    id              String @id @default(uuid())
+    name            String
+    query           String?
+    mode            String @default("segment")
+    targetCount     Int @default(0)
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
 }

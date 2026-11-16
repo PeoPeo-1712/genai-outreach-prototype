@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
+    "@google/genai": "^3.3.0",
     "@prisma/client": "^6.19.3",
     "clsx": "^2.1.1",
     "lucide-react": "^1.72.0",
