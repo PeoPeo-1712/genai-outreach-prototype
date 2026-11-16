@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Inbox, RefreshCw, Loader2, MessageSquare, CheckCircle2, Clock, Download } from 'lucide-react';
+import { Inbox, RefreshCw, Loader2, MessageSquare, CheckCircle2, Clock, Download, AlertTriangle } from 'lucide-react';
 import { CandidateDTO } from '@/types';
 import { ReplyFeed } from '@/components/ReplyFeed';
 
@@ -119,8 +119,18 @@ export default function InboxPage() {
       </div>
 
       {syncFeedback && (
-        <div className="rounded-lg bg-zinc-900 border border-zinc-800 p-3 text-xs text-zinc-300 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`rounded-lg border p-3 text-xs flex items-center gap-2.5 ${
+            syncFeedback.toLowerCase().includes('failed') || syncFeedback.includes('402') || syncFeedback.includes('credits depleted')
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+              : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+          }`}
+        >
+          {syncFeedback.toLowerCase().includes('failed') || syncFeedback.includes('402') || syncFeedback.includes('credits depleted') ? (
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{syncFeedback}</span>
         </div>
       )}
