@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Inbox, RefreshCw, Loader2, MessageSquare, CheckCircle2, Clock } from 'lucide-react';
+import { Inbox, RefreshCw, Loader2, MessageSquare, CheckCircle2, Clock, Download } from 'lucide-react';
 import { CandidateDTO } from '@/types';
 import { ReplyFeed } from '@/components/ReplyFeed';
 
@@ -92,6 +92,15 @@ export default function InboxPage() {
               Synced at {lastSyncedAt}
             </span>
           )}
+
+          <a
+            href="/api/candidates/export"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 hover:border-zinc-700 text-xs font-medium transition-colors cursor-pointer"
+            title="Export candidates to CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </a>
 
           <button
             type="button"

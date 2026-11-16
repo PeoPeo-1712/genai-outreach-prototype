@@ -15,12 +15,18 @@ export type MessageSendStatus =
   | 'FAILED'
   | 'SKIPPED';
 
+export type DiscoverySource = 'auto' | 'exa' | 'x';
+export type OutreachTone = 'warm' | 'direct' | 'formal';
+
 export interface DiscoveryRequest {
   mode: 'segment' | 'seeds';
+  discoverySource?: DiscoverySource;
   query?: string;
   seedHandles?: string[];
   maxResults?: number;
   useExa?: boolean;
+  tone?: OutreachTone;
+  valueProp?: string;
 }
 
 export interface MessageDTO {
@@ -78,7 +84,15 @@ export interface RateLimitStatusDTO {
 
 export interface OutreachSendResult {
   success: boolean;
-  status: 'SENT' | 'BLOCKED_DM_CLOSED' | 'RATE_LIMITED' | 'DUPLICATE_BLOCKED' | 'SANDBOX_BLOCKED' | 'FAILED';
+  status:
+    | 'SENT'
+    | 'BLOCKED_DM_CLOSED'
+    | 'RATE_LIMITED'
+    | 'DUPLICATE_BLOCKED'
+    | 'SANDBOX_BLOCKED'
+    | 'DAILY_LIMIT_REACHED'
+    | 'X_CREDITS_DEPLETED'
+    | 'FAILED';
   dmEventId?: string;
   conversationId?: string;
   error?: string;
@@ -93,6 +107,8 @@ export interface CandidateStatsDTO {
   blocked: number;
   needsAttention: number;
   skipped: number;
+  sentToday: number;
+  dailyLimit: number;
 }
 
 export interface DiscoveryResultDTO {
@@ -100,5 +116,7 @@ export interface DiscoveryResultDTO {
   processedCount: number;
   skippedCount: number;
   errors?: string[];
+  warning?: string;
+  errorCode?: string;
   rateLimits?: RateLimitStatusDTO[];
 }

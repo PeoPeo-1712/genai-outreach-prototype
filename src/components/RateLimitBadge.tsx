@@ -1,16 +1,24 @@
 'use client';
 
 import React from 'react';
-import { ShieldAlert, Zap, Clock } from 'lucide-react';
+import { ShieldAlert, Zap, Clock, Send } from 'lucide-react';
 import { RateLimitStatusDTO } from '@/types';
 
 interface RateLimitBadgeProps {
   rateLimits?: RateLimitStatusDTO[];
   sandboxMode?: boolean;
   allowedHandles?: string | null;
+  sentToday?: number;
+  dailyLimit?: number;
 }
 
-export function RateLimitBadge({ rateLimits = [], sandboxMode = false, allowedHandles }: RateLimitBadgeProps) {
+export function RateLimitBadge({
+  rateLimits = [],
+  sandboxMode = false,
+  allowedHandles,
+  sentToday = 0,
+  dailyLimit = 25,
+}: RateLimitBadgeProps) {
   const dmLimit = rateLimits.find((r) => r.endpoint.includes('dm') || r.endpoint.includes('messages'));
   const searchLimit = rateLimits.find((r) => r.endpoint.includes('search'));
 
@@ -22,8 +30,27 @@ export function RateLimitBadge({ rateLimits = [], sandboxMode = false, allowedHa
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const isDailyCapFull = sentToday >= dailyLimit;
+
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-2 text-xs flex-wrap">
+      {/* Daily Send Cap Counter */}
+      <div
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium ${
+          isDailyCapFull
+            ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            : sentToday > 15
+            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+        }`}
+        title={`Daily Send Cap: ${sentToday}/${dailyLimit} DMs sent today`}
+      >
+        <Send className="w-3 h-3 text-emerald-400" />
+        <span>
+          Sent Today: <strong>{sentToday}</strong>/{dailyLimit}
+        </span>
+      </div>
+
       {/* Sandbox Mode Badge */}
       {sandboxMode ? (
         <div
@@ -36,7 +63,7 @@ export function RateLimitBadge({ rateLimits = [], sandboxMode = false, allowedHa
       ) : (
         <div
           title="Production mode: Outreach will message approved candidates directly"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span>Live Safety</span>

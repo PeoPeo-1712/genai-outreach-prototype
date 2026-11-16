@@ -4,10 +4,13 @@ import { DiscoveryService } from '@/services/DiscoveryService';
 
 const DiscoverySchema = z.object({
   mode: z.enum(['segment', 'seeds']).default('segment'),
+  discoverySource: z.enum(['auto', 'exa', 'x']).default('auto'),
   query: z.string().optional(),
   seedHandles: z.array(z.string()).optional(),
   maxResults: z.number().int().min(1).max(50).optional(),
   useExa: z.boolean().optional(),
+  tone: z.enum(['warm', 'direct', 'formal']).optional(),
+  valueProp: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
     const result = await discoveryService.discover(parseResult.data);
 
     return NextResponse.json({
-      success: true,
+      success: !result.errorCode,
       ...result,
     });
   } catch (err: unknown) {

@@ -7,9 +7,12 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "db:clean": "tsx src/scripts/clean-db.ts",
+    "db:studio": "prisma studio",
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@google/genai": "^3.3.0",
     "@prisma/client": "^6.19.3",
     "clsx": "^2.1.1",

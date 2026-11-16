@@ -14,6 +14,8 @@ export function HeaderNav() {
   const [rateLimits, setRateLimits] = useState<RateLimitStatusDTO[]>([]);
   const [sandboxMode, setSandboxMode] = useState<boolean>(false);
   const [allowedHandles, setAllowedHandles] = useState<string | null>(null);
+  const [sentToday, setSentToday] = useState<number>(0);
+  const [dailyLimit, setDailyLimit] = useState<number>(25);
 
   const fetchStatusAndStats = async () => {
     try {
@@ -32,6 +34,12 @@ export function HeaderNav() {
         setRateLimits(candData.rateLimits || []);
         setSandboxMode(Boolean(candData.sandboxMode));
         setAllowedHandles(candData.allowedHandles || null);
+        if (candData.stats?.sentToday !== undefined) {
+          setSentToday(candData.stats.sentToday);
+        }
+        if (candData.stats?.dailyLimit !== undefined) {
+          setDailyLimit(candData.stats.dailyLimit);
+        }
       }
     } catch (e) {
       console.error('Failed to load header status:', e);
@@ -98,6 +106,8 @@ export function HeaderNav() {
               rateLimits={rateLimits}
               sandboxMode={sandboxMode}
               allowedHandles={allowedHandles}
+              sentToday={sentToday}
+              dailyLimit={dailyLimit}
             />
           </div>
 

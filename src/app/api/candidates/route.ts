@@ -30,27 +30,46 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const [candidates, allCount, pendingCount, sentCount, blockedCount, needsAttentionCount, skippedCount, rateLimits] =
-      await Promise.all([
-        prisma.candidate.findMany({
-          where,
-          orderBy: [{ fitScore: 'desc' }, { createdAt: 'desc' }],
-          take: limit,
-          include: {
-            messages: {
-              orderBy: { createdAt: 'desc' },
-              take: 5,
-            },
+    const dailyLimit = Number(process.env.DAILY_DM_LIMIT) || 25;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      candidates,
+      allCount,
+      pendingCount,
+      sentCount,
+      blockedCount,
+      needsAttentionCount,
+      skippedCount,
+      sentTodayCount,
+      rateLimits,
+    ] = await Promise.all([
+      prisma.candidate.findMany({
+        where,
+        orderBy: [{ fitScore: 'desc' }, { createdAt: 'desc' }],
+        take: limit,
+        include: {
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 5,
           },
-        }),
-        prisma.candidate.count(),
-        prisma.candidate.count({ where: { status: 'PENDING' } }),
-        prisma.candidate.count({ where: { status: 'SENT' } }),
-        prisma.candidate.count({ where: { status: { in: ['BLOCKED_DM_CLOSED', 'RATE_LIMITED'] } } }),
-        prisma.candidate.count({ where: { messages: { some: { needsAttention: true } } } }),
-        prisma.candidate.count({ where: { status: 'SKIPPED' } }),
-        prisma.rateLimitLog.findMany({ orderBy: { updatedAt: 'desc' } }),
-      ]);
+        },
+      }),
+      prisma.candidate.count(),
+      prisma.candidate.count({ where: { status: 'PENDING' } }),
+      prisma.candidate.count({ where: { status: 'SENT' } }),
+      prisma.candidate.count({ where: { status: { in: ['BLOCKED_DM_CLOSED', 'RATE_LIMITED'] } } }),
+      prisma.candidate.count({ where: { messages: { some: { needsAttention: true } } } }),
+      prisma.candidate.count({ where: { status: 'SKIPPED' } }),
+      prisma.message.count({
+        where: {
+          sendStatus: 'SENT',
+          sentAt: { gte: startOfToday },
+        },
+      }),
+      prisma.rateLimitLog.findMany({ orderBy: { updatedAt: 'desc' } }),
+    ]);
 
     const isSandboxMode = Boolean(
       process.env.NODE_ENV !== 'production' && process.env.ALLOWED_TEST_HANDLES
@@ -65,6 +84,8 @@ export async function GET(req: NextRequest) {
         blocked: blockedCount,
         needsAttention: needsAttentionCount,
         skipped: skippedCount,
+        sentToday: sentTodayCount,
+        dailyLimit,
       },
       rateLimits: rateLimits.map((r) => ({
         endpoint: r.endpoint,

@@ -1,8 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Send, Save, SkipForward, Loader2, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
-import { MessageDTO, OutreachSendResult } from '@/types';
+import {
+  Send,
+  Save,
+  SkipForward,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Sparkles,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { MessageDTO, OutreachSendResult, OutreachTone } from '@/types';
 
 interface MessageDraftEditorProps {
   candidateId: string;
@@ -22,9 +32,16 @@ export function MessageDraftEditor({
   onSendComplete,
 }: MessageDraftEditorProps) {
   const [text, setText] = useState(latestMessage?.draftText || initialDraftText || '');
+  const [tone, setTone] = useState<OutreachTone>('warm');
+  const [valueProp, setValueProp] = useState(
+    'At GenAI Fund, we back ambitious AI & robotics builders across Southeast Asia with early capital, GPU compute, and global network.'
+  );
+  const [showOptions, setShowOptions] = useState(false);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
 
   const charCount = text.length;
@@ -55,6 +72,32 @@ export function MessageDraftEditor({
     }
   };
 
+  const handleRegenerate = async () => {
+    setIsRegenerating(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/candidates/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, tone, valueProp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.code === 'LLM_QUOTA_EXHAUSTED') {
+          throw new Error('LLM Quota Exhausted (429). Please check your API credits or switch provider in .env.');
+        }
+        throw new Error(data.error || 'Failed to rewrite draft DM');
+      }
+      setText(data.draftText);
+      setFeedback({ type: 'success', message: `Draft regenerated using ${tone.toUpperCase()} tone!` });
+      onUpdateSuccess?.();
+    } catch (err: unknown) {
+      setFeedback({ type: 'error', message: (err as Error).message });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const handleApproveAndSend = async () => {
     if (isOverLimit || charCount === 0) return;
     setIsSending(true);
@@ -70,7 +113,17 @@ export function MessageDraftEditor({
       if (data.success) {
         setFeedback({ type: 'success', message: `DM sent successfully to @${candidateUsername}!` });
       } else {
-        if (data.status === 'SANDBOX_BLOCKED') {
+        if (data.status === 'X_CREDITS_DEPLETED') {
+          setFeedback({
+            type: 'error',
+            message: 'X API Pay-per-use credits depleted (402). Cannot send DM until account is topped up.',
+          });
+        } else if (data.status === 'DAILY_LIMIT_REACHED') {
+          setFeedback({
+            type: 'warning',
+            message: data.error || 'Daily outreach limit reached for today.',
+          });
+        } else if (data.status === 'SANDBOX_BLOCKED') {
           setFeedback({
             type: 'warning',
             message: `Sandbox blocked: @${candidateUsername} is not in ALLOWED_TEST_HANDLES.`,
@@ -143,6 +196,7 @@ export function MessageDraftEditor({
 
   return (
     <div className="space-y-3">
+      {/* Draft Textarea */}
       <div className="relative">
         <textarea
           rows={3}
@@ -164,6 +218,67 @@ export function MessageDraftEditor({
         </div>
       </div>
 
+      {/* Tone & Value Prop Options Bar */}
+      <div className="flex items-center justify-between text-xs text-zinc-400">
+        <button
+          type="button"
+          onClick={() => setShowOptions(!showOptions)}
+          className="inline-flex items-center gap-1.5 hover:text-zinc-200 transition-colors"
+        >
+          <SlidersHorizontal className="w-3 h-3" />
+          <span>{showOptions ? 'Hide Tone & Value Prop' : 'Customize Tone & Value Prop'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={isRegenerating || isSending}
+          className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+        >
+          {isRegenerating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          )}
+          <span>Regenerate Draft</span>
+        </button>
+      </div>
+
+      {/* Expanded Tone & Value Prop Configuration */}
+      {showOptions && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3 space-y-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-400 font-medium">Tone:</span>
+            <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded border border-zinc-800">
+              {(['warm', 'direct', 'formal'] as OutreachTone[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTone(t)}
+                  className={`px-2.5 py-0.5 rounded capitalize text-[11px] transition-colors ${
+                    tone === t ? 'bg-emerald-600 text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-zinc-400 text-[11px] block">GenAI Fund Pitch / Value Prop:</label>
+            <input
+              type="text"
+              value={valueProp}
+              onChange={(e) => setValueProp(e.target.value)}
+              placeholder="Value proposition..."
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Messages */}
       {feedback && (
         <div
           className={`flex items-center gap-2 p-2.5 rounded-lg text-xs ${
@@ -185,11 +300,12 @@ export function MessageDraftEditor({
         </div>
       )}
 
+      {/* Action Buttons */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <button
           type="button"
           onClick={handleSkip}
-          disabled={isSkipping || isSending || isSaving}
+          disabled={isSkipping || isSending || isSaving || isRegenerating}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors disabled:opacity-50"
         >
           {isSkipping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SkipForward className="w-3.5 h-3.5" />}
@@ -200,7 +316,7 @@ export function MessageDraftEditor({
           <button
             type="button"
             onClick={handleSaveDraft}
-            disabled={isSaving || isSending || isSkipping || isOverLimit}
+            disabled={isSaving || isSending || isSkipping || isRegenerating || isOverLimit}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-800 text-zinc-200 hover:bg-zinc-700 transition-colors border border-zinc-700 disabled:opacity-50"
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -210,7 +326,7 @@ export function MessageDraftEditor({
           <button
             type="button"
             onClick={handleApproveAndSend}
-            disabled={isSending || isSaving || isSkipping || isOverLimit || charCount === 0}
+            disabled={isSending || isSaving || isSkipping || isRegenerating || isOverLimit || charCount === 0}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isSending ? (

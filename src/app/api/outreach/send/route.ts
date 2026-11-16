@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
     let httpStatus = 200;
     if (!result.success) {
       switch (result.status) {
+        case 'X_CREDITS_DEPLETED':
+          httpStatus = 402;
+          break;
         case 'SANDBOX_BLOCKED':
         case 'BLOCKED_DM_CLOSED':
           httpStatus = 403;
@@ -34,6 +37,7 @@ export async function POST(req: NextRequest) {
           httpStatus = 409;
           break;
         case 'RATE_LIMITED':
+        case 'DAILY_LIMIT_REACHED':
           httpStatus = 429;
           break;
         case 'FAILED':

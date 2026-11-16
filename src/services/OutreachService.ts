@@ -1,16 +1,9 @@
 import { TwitterApi, ApiResponseError } from 'twitter-api-v2';
 import { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { OutreachSendResult } from '../types';
 
-export interface SendDMResult {
-    success: boolean;
-    status: 'SENT' | 'BLOCKED_DM_CLOSED' | 'RATE_LIMITED' | 'DUPLICATE_BLOCKED' | 'SANDBOX_BLOCKED' | 'FAILED';
-    dmEventId?: string;
-    conversationId?: string;
-    error?: string;
-    suggestedAction?: string;
-    rateLimitResetEpoch?: number;
-}
+export type SendDMResult = OutreachSendResult;
 
 const X_BASE_URL = 'https://' + 'x.com';
 
@@ -27,7 +20,7 @@ export class OutreachService {
     /**
      * Resolve a valid authenticated TwitterApi client:
      * 1) Custom TwitterApi client injected via constructor (for tests/mocking)
-     * 2) OAuth 2.0 connection stored in SQLite (auto-refreshed when near expiry)
+     * 2) OAuth 2.0 connection stored in SQLite (auto-refreshed when < 10 min before expiry)
      * 3) OAuth 1.0a 4-key credentials from .env (optional fallback for app owner)
      * 4) Static X_USER_ACCESS_TOKEN from .env (for CLI smoke tests)
      */
@@ -42,7 +35,8 @@ export class OutreachService {
         });
 
         if (conn) {
-            const isNearExpiry = conn.expiresAt.getTime() - Date.now() < 5 * 60 * 1000; // within 5 minutes
+            // Auto-refresh token if within 10 minutes of expiry
+            const isNearExpiry = conn.expiresAt.getTime() - Date.now() < 10 * 60 * 1000;
             if (isNearExpiry && conn.refreshToken) {
                 const clientId = process.env.X_CLIENT_ID;
                 const clientSecret = process.env.X_CLIENT_SECRET;
@@ -65,6 +59,7 @@ export class OutreachService {
                             },
                         });
 
+                        console.log(`[OutreachService] Token refreshed successfully for @${conn.username}`);
                         if (conn.xUserId) this.myUserId = conn.xUserId;
                         return refreshedClient;
                     } catch (refreshErr) {
@@ -115,6 +110,21 @@ export class OutreachService {
         return this.myUserId;
     }
 
+    async getDailyStats(): Promise<{ sentToday: number; dailyLimit: number }> {
+        const dailyLimit = Number(process.env.DAILY_DM_LIMIT) || 25;
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const sentToday = await this.prisma.message.count({
+            where: {
+                sendStatus: 'SENT',
+                sentAt: { gte: startOfToday },
+            },
+        });
+
+        return { sentToday, dailyLimit };
+    }
+
     async checkDuplicate(xUserId: string): Promise<boolean> {
         const existingCandidate = await this.prisma.candidate.findUnique({
             where: { xUserId },
@@ -151,6 +161,7 @@ export class OutreachService {
             throw new Error(`Candidate not found with ID: ${candidateId}`);
         }
 
+        // 1. Deduplication Gate
         const isDuplicate = await this.checkDuplicate(candidate.xUserId);
         if (isDuplicate) {
             const msg = `Candidate @${candidate.username} (${candidate.xUserId}) has already been messaged. Aborting to prevent duplicate outreach.`;
@@ -162,6 +173,7 @@ export class OutreachService {
             };
         }
 
+        // 2. Sandbox Safety Gate
         const testWhitelist =
             process.env.ALLOWED_TEST_HANDLES?.split(',')
                 .map((h) => h.trim().toLowerCase().replace(/^@/, ''))
@@ -174,6 +186,18 @@ export class OutreachService {
             return {
                 success: false,
                 status: 'SANDBOX_BLOCKED',
+                error: msg,
+            };
+        }
+
+        // 3. Daily Send Cap
+        const { sentToday, dailyLimit } = await this.getDailyStats();
+        if (sentToday >= dailyLimit) {
+            const msg = `Daily outreach limit reached (${sentToday}/${dailyLimit} sent today). To protect your X account, wait until tomorrow or increase DAILY_DM_LIMIT in .env.`;
+            console.warn(`[OutreachService] DAILY_LIMIT_REACHED: ${msg}`);
+            return {
+                success: false,
+                status: 'DAILY_LIMIT_REACHED',
                 error: msg,
             };
         }
@@ -229,6 +253,27 @@ export class OutreachService {
                 const errorData = err.data as Record<string, unknown> | undefined;
                 const reason = typeof errorData?.reason === 'string' ? errorData.reason : 'unknown';
 
+                // HTTP 402: Credits Depleted
+                if (err.code === 402) {
+                    const detailMessage = 'X API Pay-per-use credits depleted — cannot send/sync DMs until topped up';
+                    console.error(`[OutreachService] X API 402 Credits Depleted for @${candidate.username}: ${detailMessage}`);
+
+                    await this.prisma.message.update({
+                        where: { id: messageRecord.id },
+                        data: {
+                            sendStatus: 'FAILED',
+                            errorReason: 'X API credits depleted (402)',
+                        },
+                    });
+
+                    return {
+                        success: false,
+                        status: 'X_CREDITS_DEPLETED',
+                        error: detailMessage,
+                    };
+                }
+
+                // HTTP 403: DM Closed
                 if (err.code === 403) {
                     const detailMessage =
                         err.data?.detail ||
@@ -262,6 +307,7 @@ export class OutreachService {
                     };
                 }
 
+                // HTTP 429: Rate Limited
                 if (err.code === 429) {
                     const resetEpoch = err.rateLimit?.reset;
                     const resetDate = resetEpoch ? new Date(resetEpoch * 1000).toISOString() : 'Unknown';
@@ -395,6 +441,10 @@ export class OutreachService {
         } catch (err) {
             if (err instanceof ApiResponseError) {
                 const txId = err.headers?.['x-transaction-id'] ?? 'N/A';
+                if (err.code === 402) {
+                    console.error('[OutreachService] X API 402 credits depleted during syncReplies');
+                    throw new Error('X API Pay-per-use credits depleted — cannot sync DMs until topped up');
+                }
                 console.error(
                     `[OutreachService] Failed to sync DM replies (HTTP ${err.code}, txId=${txId}):`,
                     err.data ?? err.message
