@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test:run": "tsx src/scripts/test-run.ts --mock-ai",
     "db:clean": "tsx src/scripts/clean-db.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma skills sync || exit 0"
